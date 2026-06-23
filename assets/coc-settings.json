@@ -1,0 +1,25 @@
+{
+  "coc.preferences.extensionUpdateCheck": "never",
+
+  "list.indicator": "›",
+
+  "git.addGBlameToVirtualText": true,
+  "git.virtualTextPrefix": "  ⏷ ",
+  "git.addGBlameToBufferVar": true,
+
+  "python.analysis.exclude": [
+    "**/cooked/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.git/**"
+  ],
+  "python.analysis.useLibraryCodeForTypes": true,
+  "python.analysis.diagnosticMode": "openFilesOnly",
+
+  "tsserver.maxTsServerMemory": 3072,
+
+  "diagnostic.virtualText": true,
+  "diagnostic.virtualTextCurrentLineOnly": true,
+
+  "suggest.noselect": true
+}

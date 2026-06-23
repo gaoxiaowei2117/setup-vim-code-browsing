@@ -1,0 +1,134 @@
+" ============================================================================
+" .vimrc — 代码浏览配置 (Python / TypeScript)
+"   结构 / 跳转 / 全局搜索 / 调用关系 / git blame
+" ============================================================================
+
+set nocompatible
+filetype plugin indent on
+syntax on
+
+" ---------- 基础体验 ----------
+set number                         " 绝对行号(固定不变)
+set hidden                         " 允许在未保存的 buffer 间切换
+set updatetime=300                 " 更快的 CursorHold(coc 行内 blame/诊断)
+set signcolumn=yes                 " 始终显示 sign 列,避免抖动
+set mouse=a
+set ignorecase smartcase
+set incsearch hlsearch
+set scrolloff=5
+set splitright splitbelow
+set tabstop=4 shiftwidth=4 expandtab
+set encoding=utf-8
+set termguicolors
+let mapleader = " "                " <Space> 作为 leader 键
+
+" ---------- 插件 ----------
+call plug#begin('~/.vim/plugged')
+  " 全局搜索 (依赖 fzf + ripgrep)
+  Plug '~/.fzf'
+  Plug 'junegunn/fzf.vim'
+
+  " LSP: 跳转 / 引用 / 大纲 / 调用关系 / 诊断
+  Plug 'neoclide/coc.nvim', {'branch': 'release'}
+
+  " Git: blame / 历史 / diff
+  Plug 'tpope/vim-fugitive'
+
+  " 文件树 (可选,浏览目录)
+  Plug 'preservim/nerdtree'
+
+  " 配色与状态栏
+  Plug 'vim-airline/vim-airline'
+  Plug 'morhetz/gruvbox'
+call plug#end()
+
+" ---------- 配色 ----------
+set background=dark
+silent! colorscheme gruvbox
+
+" ============================================================================
+" 全局搜索 (fzf.vim)
+"   排除 vendored 目录,否则会被海量文件淹没
+" ============================================================================
+let $FZF_DEFAULT_COMMAND = 'rg --files --hidden --follow ' .
+      \ '--glob "!.git/*" --glob "!cooked/*" --glob "!**/node_modules/*" ' .
+      \ '--glob "!**/dist/*" --glob "!**/*.so" --glob "!**/*.gz"'
+
+" :Rg 全文搜索(同样排除 cooked / node_modules)
+command! -bang -nargs=* Rg
+      \ call fzf#vim#grep(
+      \   'rg --column --line-number --no-heading --color=always --smart-case ' .
+      \   '--glob "!cooked/*" --glob "!**/node_modules/*" --glob "!**/dist/*" -- ' .
+      \   shellescape(<q-args>),
+      \   1, fzf#vim#with_preview(), <bang>0)
+
+" 文件/搜索快捷键
+nnoremap <leader>f  :Files<CR>          " 按文件名找文件
+nnoremap <leader>g  :Rg<CR>            " 全工程全文搜索
+nnoremap <leader>b  :Buffers<CR>        " 切换已打开的 buffer
+nnoremap <leader>l  :BLines<CR>        " 当前文件内搜索行
+nnoremap <leader>/  :Rg <C-r><C-w><CR>  " 搜索光标下的单词
+
+" ============================================================================
+" coc.nvim — LSP (跳转 / 引用 / 大纲 / 调用关系)
+" ============================================================================
+" --- 跳转 ---
+nmap <silent> gd <Plug>(coc-definition)        " 跳到定义
+nmap <silent> gy <Plug>(coc-type-definition)   " 跳到类型定义
+nmap <silent> gi <Plug>(coc-implementation)     " 跳到实现
+nmap <silent> gr <Plug>(coc-references)         " 查看所有引用(被调用处)
+" <C-o> 返回上一个位置,<C-i> 前进(vim 内置跳转列表)
+
+" --- 代码结构 (outline) ---
+nnoremap <silent> <leader>o  :CocOutline<CR>    " 当前文件符号大纲(类/函数)
+nnoremap <silent> <leader>s  :CocList -I symbols<CR>  " 全工程符号搜索
+
+" --- 调用关系 (call hierarchy) ---
+nnoremap <silent> <leader>ci :call CocAction('showIncomingCalls')<CR>  " 谁调用了它
+nnoremap <silent> <leader>co :call CocAction('showOutgoingCalls')<CR>  " 它调用了谁
+
+" --- 悬浮文档 / 诊断 ---
+nnoremap <silent> K :call CocActionAsync('doHover')<CR>  " 查看文档/签名
+nmap <silent> [g <Plug>(coc-diagnostic-prev)
+nmap <silent> ]g <Plug>(coc-diagnostic-next)
+
+" --- 补全:回车确认,Tab 选择 ---
+inoremap <silent><expr> <CR> coc#pum#visible() ? coc#pum#confirm() : "\<CR>"
+inoremap <silent><expr> <Tab>
+      \ coc#pum#visible() ? coc#pum#next(1) :
+      \ CheckBackspace() ? "\<Tab>" : coc#refresh()
+inoremap <expr><S-Tab> coc#pum#visible() ? coc#pum#prev(1) : "\<C-h>"
+function! CheckBackspace() abort
+  let col = col('.') - 1
+  return !col || getline('.')[col - 1]  =~# '\s'
+endfunction
+
+" ============================================================================
+" Git (vim-fugitive + coc-git)
+" ============================================================================
+nnoremap <leader>gb :Git blame<CR>     " 整个文件逐行 blame(提交人/时间/哈希)
+nnoremap <leader>gl :Git log -- %<CR>  " 当前文件的提交历史
+" 行内 blame(光标停留时显示该行提交人/时间)由 coc-git 提供,见 coc-settings.json
+
+" ============================================================================
+" 文件树 (NERDTree)
+" ============================================================================
+nnoremap <leader>e :NERDTreeToggle<CR>
+nnoremap <leader>n :NERDTreeFind<CR>   " 在树中定位当前文件
+let NERDTreeIgnore = ['\.pyc$', '\~$', '^cooked$', '^node_modules$', '^dist$']
+
+" ============================================================================
+" 快捷键速查表  ( <space>? 随时打开,q 关闭 )
+" ============================================================================
+function! s:OpenCheatsheet() abort
+  let l:f = expand('~/.vim/cheatsheet.txt')
+  if !filereadable(l:f)
+    echohl WarningMsg | echo 'cheatsheet 未找到: ' . l:f | echohl None | return
+  endif
+  execute 'botright vsplit ' . fnameescape(l:f)
+  setlocal buftype=nofile bufhidden=wipe nobuflisted noswapfile nomodifiable
+  setlocal nonumber norelativenumber signcolumn=no
+  vertical resize 80
+  nnoremap <buffer><silent> q :close<CR>
+endfunction
+nnoremap <silent> <leader>? :call <SID>OpenCheatsheet()<CR>
