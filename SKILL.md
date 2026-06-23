@@ -25,8 +25,13 @@ Turns a plain Vim into a code-reading environment. Maps five common needs to too
 
 - `node` ≥ v18 —— coc.nvim 必需。**没有 node 就装不了**,先让用户装 node。
 - `vim` ≥ 8.1(推荐 9.x),`git`,`curl`。
-- `ripgrep` (`rg`) —— 全局搜索需要。缺了其余功能仍可用。
-- 不需要 root:fzf 装到 `~/.fzf`,插件装到 `~/.vim`。
+- `ripgrep` (`rg`) —— 全局搜索(`<space>f`/`:Rg`)需要。`install.sh` 会在缺失时自动装到 `~/.local/bin`(免 root)。缺了其余功能仍可用。
+- 不需要 root:fzf 装到 `~/.fzf`,插件装到 `~/.vim`,ripgrep 装到 `~/.local/bin`。
+
+> ⚠️ **`rg` 探测陷阱**:某些环境(如 Claude Code 的 shell)会注入一个名为 `rg` 的 shell 函数,
+> 使 `command -v rg` / `rg --version` 误报成功。但 vim 的 fzf 用非交互 `sh -c` 执行,
+> 那里没有真正的 `rg` 二进制 → `<space>f` 报 `Command failed`。
+> 正确判断:`sh -c 'command -v rg'`。`install.sh` 已按此检测。
 
 ## Workflow
 

@@ -20,9 +20,41 @@ say "检查前置依赖"
 command -v vim  >/dev/null || { echo "缺少 vim(需要 8.1+,推荐 9.x)"; exit 1; }
 command -v git  >/dev/null || { echo "缺少 git"; exit 1; }
 command -v node >/dev/null || { echo "缺少 node(coc.nvim 必需,推荐 v18+)。请先装 node。"; exit 1; }
-command -v rg   >/dev/null || warn "缺少 ripgrep(rg):全局搜索将不可用。建议安装 ripgrep。"
 echo "vim  $(vim --version | head -1 | awk '{print $5}')"
 echo "node $(node --version)"
+
+# ---------- 0b. ripgrep(无 root) ----------
+# 注意:不能用 `command -v rg` 判断。某些环境(如 Claude Code)会注入一个名为 rg
+# 的 shell 函数,让 `command -v rg` 误报成功,但 vim/fzf 用非交互的 `sh -c` 执行,
+# 那个环境里根本没有真正的 rg 二进制 → <space>f / :Rg 会 "Command failed"。
+# 所以这里用纯 sh 检测是否存在真实的 rg 可执行文件。
+say "检查/安装 ripgrep (rg)"
+if sh -c 'command -v rg >/dev/null 2>&1'; then
+  echo "rg   $(sh -c 'rg --version' | head -1)"
+else
+  warn "未发现真正的 rg 二进制,安装 ripgrep 到 ~/.local/bin (免 root)"
+  RG_VER="${RG_VER:-14.1.1}"
+  case "$(uname -m)" in
+    x86_64)  RG_ARCH="x86_64-unknown-linux-musl" ;;
+    aarch64) RG_ARCH="aarch64-unknown-linux-gnu" ;;
+    *) warn "未知架构 $(uname -m),请手动安装 ripgrep"; RG_ARCH="" ;;
+  esac
+  if [ -n "$RG_ARCH" ]; then
+    RG_PKG="ripgrep-${RG_VER}-${RG_ARCH}"
+    RG_URL="https://github.com/BurntSushi/ripgrep/releases/download/${RG_VER}/${RG_PKG}.tar.gz"
+    RG_TMP="$(mktemp -d)"
+    if curl -fL --retry 3 -o "$RG_TMP/rg.tar.gz" "$RG_URL" \
+       && tar xzf "$RG_TMP/rg.tar.gz" -C "$RG_TMP"; then
+      mkdir -p "$HOME/.local/bin"
+      install -m755 "$RG_TMP/$RG_PKG/rg" "$HOME/.local/bin/rg"
+      echo "✓ 已安装 $($HOME/.local/bin/rg --version | head -1) → ~/.local/bin/rg"
+      echo "  确保 ~/.local/bin 在 PATH 中(检查 ~/.bashrc / ~/.profile)。"
+    else
+      warn "ripgrep 下载失败,请手动安装。全局搜索(<space>f / :Rg)将不可用。"
+    fi
+    rm -rf "$RG_TMP"
+  fi
+fi
 
 # ---------- 1. fzf(无 root) ----------
 say "安装 fzf"
