@@ -7,7 +7,7 @@ description: Set up Vim as a code browser/IDE for reading large codebases — sy
 
 ## Overview
 
-Turns a plain Vim into a code-reading environment. Maps five common needs to tools:
+Turns a plain Vim into a code-reading environment. Maps common needs to tools:
 
 | 需求 | 工具 | 默认快捷键 |
 |---|---|---|
@@ -16,6 +16,7 @@ Turns a plain Vim into a code-reading environment. Maps five common needs to too
 | 全局搜索 | fzf.vim + ripgrep | `<space>f`(文件)`<space>g`(全文) |
 | 函数调用关系(谁调用/调用谁) | coc.nvim call hierarchy | `<space>ci` / `<space>co` |
 | 某行提交人/时间(git blame) | vim-fugitive + coc-git | 行内自动 + `<space>gb` |
+| 大模型问答/解释/重构 | 本机 `claude` CLI | `<space>aa` / `<space>ae` / `<space>ar` |
 
 `<leader>` 是空格键。**记不住快捷键时,在 vim 里按 `<space>?` 随时弹出速查表,`q` 关闭。**
 
@@ -27,6 +28,9 @@ Turns a plain Vim into a code-reading environment. Maps five common needs to too
 - `vim` ≥ 8.1(推荐 9.x),`git`,`curl`。
 - `ripgrep` (`rg`) —— 全局搜索(`<space>f`/`:Rg`)需要。`install.sh` 会在缺失时自动装到 `~/.local/bin`(免 root)。缺了其余功能仍可用。
 - 不需要 root:fzf 装到 `~/.fzf`,插件装到 `~/.vim`,ripgrep 装到 `~/.local/bin`。
+- (可选)`claude` CLI —— 大模型问答/解释/重构(`<space>aa`/`<space>ae`/`<space>ar`)需要。
+  纯 vimscript 通过 `claude -p` 无头调用,无此命令时这几个键不可用,不影响其余功能。
+  `<space>aa` 自由提问、`<space>ae` 解释、`<space>ar` 重构替换;Visual 用选区、Normal 用整个文件作上下文。同步调用,返回前 vim 会短暂卡住。
 
 > ⚠️ **`rg` 探测陷阱**:某些环境(如 Claude Code 的 shell)会注入一个名为 `rg` 的 shell 函数,
 > 使 `command -v rg` / `rg --version` 误报成功。但 vim 的 fzf 用非交互 `sh -c` 执行,

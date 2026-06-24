@@ -24,7 +24,7 @@ let mapleader = " "                " <Space> 作为 leader 键
 
 " ---------- 插件 ----------
 call plug#begin('~/.vim/plugged')
-  " 全局搜索 (依赖 fzf + ripgrep)
+  " 全局搜索 (依赖系统 fzf + ripgrep)
   Plug '~/.fzf'
   Plug 'junegunn/fzf.vim'
 
@@ -50,6 +50,7 @@ silent! colorscheme gruvbox
 " 全局搜索 (fzf.vim)
 "   排除 vendored 目录,否则会被海量文件淹没
 " ============================================================================
+" :Files / :Rg 都用 ripgrep 并跳过 cooked 等目录
 let $FZF_DEFAULT_COMMAND = 'rg --files --hidden --follow ' .
       \ '--glob "!.git/*" --glob "!cooked/*" --glob "!**/node_modules/*" ' .
       \ '--glob "!**/dist/*" --glob "!**/*.so" --glob "!**/*.gz"'
@@ -108,7 +109,7 @@ endfunction
 " ============================================================================
 nnoremap <leader>gb :Git blame<CR>     " 整个文件逐行 blame(提交人/时间/哈希)
 nnoremap <leader>gl :Git log -- %<CR>  " 当前文件的提交历史
-" 行内 blame(光标停留时显示该行提交人/时间)由 coc-git 提供,见 coc-settings.json
+" 行内 blame(光标停留时显示该行提交人/时间)由 coc-git 提供,见下方 coc-settings
 
 " ============================================================================
 " 文件树 (NERDTree)
@@ -132,3 +133,98 @@ function! s:OpenCheatsheet() abort
   nnoremap <buffer><silent> q :close<CR>
 endfunction
 nnoremap <silent> <leader>? :call <SID>OpenCheatsheet()<CR>
+
+" ============================================================================
+" 大模型接入 (本机 claude CLI,无头模式 claude -p)
+"   <space>ae  解释代码 (Visual 选区;普通模式则解释整个文件)
+"   <space>ar  重构替换 (Visual 选中后输入指令,Claude 改写并替换选区)
+"   说明:同步调用,Claude 返回前 vim 会短暂卡住,属正常。
+" ============================================================================
+function! s:RunClaude(prompt, text) abort
+  " prompt 作为指令参数,text 作为标准输入喂给 claude
+  let l:out = system('claude -p ' . shellescape(a:prompt), a:text)
+  if v:shell_error != 0
+    echohl ErrorMsg | echo 'claude 调用失败: ' . l:out | echohl None
+    return ''
+  endif
+  return l:out
+endfunction
+
+" 去掉首尾的空行与 ```fenced``` 围栏,保证重构结果是纯代码
+function! s:StripFences(lines) abort
+  let l:l = copy(a:lines)
+  while len(l:l) > 0 && l:l[0]  =~# '^\s*$' | call remove(l:l, 0)  | endwhile
+  if    len(l:l) > 0 && l:l[0]  =~# '^\s*```' | call remove(l:l, 0)  | endif
+  while len(l:l) > 0 && l:l[-1] =~# '^\s*$' | call remove(l:l, -1) | endwhile
+  if    len(l:l) > 0 && l:l[-1] =~# '^\s*```' | call remove(l:l, -1) | endif
+  return l:l
+endfunction
+
+function! s:OpenScratch(name, lines) abort
+  botright new
+  setlocal buftype=nofile bufhidden=wipe noswapfile nobuflisted filetype=markdown
+  silent! execute 'file' fnameescape(a:name)
+  call setline(1, a:lines)
+  setlocal nomodifiable
+  nnoremap <buffer><silent> q :close<CR>
+  normal! gg
+endfunction
+
+" 上下文:Visual 调用取选区,Normal 调用取整个文件
+function! s:Context(use_selection) abort
+  if a:use_selection
+    return join(getline(line("'<"), line("'>")), "\n")
+  endif
+  return join(getline(1, '$'), "\n")
+endfunction
+
+" 解释代码 (use_selection=1 用选区,=0 用整个文件)
+function! AIExplain(use_selection) abort
+  let l:code = s:Context(a:use_selection)
+  echo 'Claude 正在解释...(请稍候)'
+  let l:prompt = '你会通过标准输入收到一段 ' . &filetype .
+        \ ' 代码。用中文简洁解释:它的作用、关键逻辑、以及可能的问题或副作用。'
+  let l:out = s:RunClaude(l:prompt, l:code)
+  if empty(l:out) | return | endif
+  call s:OpenScratch('claude-explain', split(l:out, "\n"))
+endfunction
+
+" 重构替换:必须在 Visual 模式选中后调用
+function! AIRefactor(...) abort
+  let l:a = line("'<") | let l:b = line("'>")
+  if l:a == 0 || l:b == 0
+    echohl WarningMsg | echo '请先在 Visual 模式选中要重构的代码' | echohl None | return
+  endif
+  let l:instr = a:0 > 0 ? a:1 : input('重构指令: ')
+  if empty(l:instr) | redraw | echo '已取消' | return | endif
+  let l:code = join(getline(l:a, l:b), "\n")
+  let l:prompt = '你会通过标准输入收到一段 ' . &filetype . ' 代码。按此要求改写:' .
+        \ l:instr . ' 严格只输出改写后的代码本身,不要任何解释、不要 markdown 代码围栏。'
+  echo 'Claude 正在重构...(请稍候)'
+  let l:out = s:RunClaude(l:prompt, l:code)
+  if empty(l:out) | return | endif
+  let l:lines = s:StripFences(split(l:out, "\n"))
+  if empty(l:lines) | echo 'Claude 返回为空,未改动' | return | endif
+  silent execute l:a . ',' . l:b . 'delete _'
+  call append(l:a - 1, l:lines)
+  redraw | echo 'Claude 重构完成 (' . len(l:lines) . ' 行) — u 可撤销'
+endfunction
+
+" 自由提问:输入任意问题,把选区(Visual)或整个文件(Normal)作为上下文
+function! AIAsk(use_selection, ...) abort
+  let l:q = a:0 > 0 ? a:1 : input('问 Claude: ')
+  if empty(l:q) | redraw | echo '已取消' | return | endif
+  let l:ctx = s:Context(a:use_selection)
+  echo 'Claude 思考中...(请稍候)'
+  let l:prompt = '你会通过标准输入收到一段代码作为上下文(' . &filetype .
+        \ ')。请用中文回答这个问题:' . l:q
+  let l:out = s:RunClaude(l:prompt, l:ctx)
+  if empty(l:out) | return | endif
+  call s:OpenScratch('claude-ask', split(l:out, "\n"))
+endfunction
+
+xnoremap <silent> <leader>ae :<C-u>call AIExplain(1)<CR>
+nnoremap <silent> <leader>ae :call AIExplain(0)<CR>
+xnoremap <silent> <leader>aa :<C-u>call AIAsk(1)<CR>
+nnoremap <silent> <leader>aa :call AIAsk(0)<CR>
+xnoremap <silent> <leader>ar :<C-u>call AIRefactor()<CR>
