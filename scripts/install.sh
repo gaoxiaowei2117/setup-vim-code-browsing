@@ -34,10 +34,13 @@ if sh -c 'command -v rg >/dev/null 2>&1'; then
 else
   warn "未发现真正的 rg 二进制,安装 ripgrep 到 ~/.local/bin (免 root)"
   RG_VER="${RG_VER:-14.1.1}"
-  case "$(uname -m)" in
-    x86_64)  RG_ARCH="x86_64-unknown-linux-musl" ;;
-    aarch64) RG_ARCH="aarch64-unknown-linux-gnu" ;;
-    *) warn "未知架构 $(uname -m),请手动安装 ripgrep"; RG_ARCH="" ;;
+  # 按 操作系统 + 架构 选对应的发布包(注意 macOS 报 arm64 而非 aarch64)
+  case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64)   RG_ARCH="x86_64-unknown-linux-musl" ;;
+    Linux-aarch64)  RG_ARCH="aarch64-unknown-linux-gnu" ;;
+    Darwin-x86_64)  RG_ARCH="x86_64-apple-darwin" ;;
+    Darwin-arm64)   RG_ARCH="aarch64-apple-darwin" ;;
+    *) warn "未知平台 $(uname -s)-$(uname -m),请手动安装 ripgrep(Mac 可 brew install ripgrep)"; RG_ARCH="" ;;
   esac
   if [ -n "$RG_ARCH" ]; then
     RG_PKG="ripgrep-${RG_VER}-${RG_ARCH}"
@@ -48,7 +51,7 @@ else
       mkdir -p "$HOME/.local/bin"
       install -m755 "$RG_TMP/$RG_PKG/rg" "$HOME/.local/bin/rg"
       echo "✓ 已安装 $($HOME/.local/bin/rg --version | head -1) → ~/.local/bin/rg"
-      echo "  确保 ~/.local/bin 在 PATH 中(检查 ~/.bashrc / ~/.profile)。"
+      echo "  确保 ~/.local/bin 在 PATH 中(检查 ~/.zshrc / ~/.bashrc / ~/.profile)。"
     else
       warn "ripgrep 下载失败,请手动安装。全局搜索(<space>f / :Rg)将不可用。"
     fi
